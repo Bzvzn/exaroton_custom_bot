@@ -2,6 +2,7 @@ import { database } from './datas/database.js';
 import { configManager } from './config/configManager.js';
 import { serverManager } from './services/serverManager.js';
 import { discordClient, startDiscordBot, stopDiscordBot } from './discord/discordClient.js';
+import { startTwitchBot, stopTwitchBot } from './twitch/twitchClient.js';
 
 /**
  * The main entry point of the application.
@@ -34,6 +35,10 @@ async function bootstrap() {
         console.log('[Bootstrap] Starting Discord Bot...');
         await startDiscordBot();
 
+        // 6. Start the Twitch Bot
+        console.log('[Bootstrap] Starting Twitch Bot...');
+        await startTwitchBot();
+
 
         console.log('====================================');
         console.log('   Bot successfully initialized!    ');
@@ -56,6 +61,7 @@ function shutdown(code = 0) {
     console.log('\n[System] Initiating graceful shutdown...');
 
     await stopDiscordBot();
+    await stopTwitchBot();
 
     database.close();
 
