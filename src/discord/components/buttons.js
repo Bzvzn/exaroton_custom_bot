@@ -29,7 +29,7 @@ export function createControlButtons(serverStatus = 0) {
 
     // Exaroton Status Codes: 0 = Offline, 1 = Online, 2 = Starting, 3 = Stopping
     switch (serverStatus) {
-        case 0: // Offline -> Nur Starten macht Sinn
+        case 0:
             row.addComponents(startButton);
             break;
             

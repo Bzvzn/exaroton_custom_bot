@@ -1,6 +1,6 @@
 import tmi from 'tmi.js';
-import { configManager } from '../config/configManager';
-import { serverManager } from '../services/serverManager';
+import { configManager } from '../config/configManager.js';
+import { serverManager } from '../services/serverManager.js';
 
 let twitchClient = null;
 

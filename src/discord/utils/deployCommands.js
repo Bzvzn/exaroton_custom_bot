@@ -22,8 +22,6 @@ export async function registerCommands() {
     try {
         console.log('[Discord] Started refreshing application (/) commands...');
 
-        const clientId = configManager.discordClientId;
-
         const currentUser = await rest.get(Routes.user('@me'));
 
         await rest.put(

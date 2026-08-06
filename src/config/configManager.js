@@ -94,7 +94,8 @@ class ConfigManager {
      * @returns {Array<string>} An array of server IDs. Returns an empty array if none are configured.
      */
     getServerIds() {
-        return database.getSetting('serverIds') || [];
+        const value = database.getSetting('serverIds');
+        return Array.isArray(value) ? value : [];
     }
 
 
@@ -109,7 +110,19 @@ class ConfigManager {
             console.error('[ConfigManager] setServerIds expects an array of strings.');
             return false;
         }
-        return database.setSetting('serverIds', ids);
+
+        const cleaned = ids
+            .map(id => this._normalizeServerId(id))
+            .filter(Boolean);
+
+        const unique = [...new Set(cleaned)];
+
+        if (unique.length === 0) {
+            console.error('[ConfigManager] setServerIds requires at least one valid server ID.');
+            return false;
+        }
+
+        return database.setSetting('serverIds', unique);
     }
 
 
@@ -120,15 +133,26 @@ class ConfigManager {
      * @returns {boolean} True if added, false if it already exists or failed to save.
      */
     addBackendServerId(newId) {
-        const currentIds = this.getServerIds();
+        const normalized = this._normalizeServerId(newId);
 
-        if (currentIds.includes(newId)) {
-            console.log(`[ConfigManager] Server ${newId} is already in the list.`);
+        if (!normalized) {
+            console.error('[ConfigManager] addBackendServerId requires a valid non-empty server ID.');
             return false;
         }
 
-        currentIds.push(newId);
-        return this.setServerIds(currentIds);
+        const currentIds = this.getServerIds();
+
+        if (!Array.isArray(currentIds) || currentIds.length === 0) {
+            console.error('[ConfigManager] Cannot add backend: primary server must be configured first.');
+            return false;
+        }
+
+        if (currentIds.includes(normalized)) {
+            console.log(`[ConfigManager] Server ${normalized} is already in the list.`);
+            return false;
+        }
+
+        return this.setServerIds([...currentIds, normalized]);
     }
 
 
@@ -139,14 +163,19 @@ class ConfigManager {
      * @returns {boolean} True if successfully saved.
      */
     setPrimaryServerId(proxyId) {
-        const currentIds = this.getServerIds();
-
-        if (currentIds.length === 0) {
-            return this.setServerIds([proxyId]);
+        const normalized = this._normalizeServerId(proxyId);
+        if (!normalized) {
+            console.error('[ConfigManager] setPrimaryServerId requires a valid non-empty server ID.');
+            return false;
         }
 
-        currentIds[0] = proxyId;
-        return this.setServerIds(currentIds);
+        const currentIds = this.getServerIds();
+        const safeIds = Array.isArray(currentIds) ? currentIds : [];
+
+        if (safeIds.length === 0) return this.setServerIds([normalized]);
+
+        safeIds[0] = normalized;
+        return this.setServerIds(safeIds);
     }
 
 
@@ -272,9 +301,17 @@ class ConfigManager {
      */
     setButtonPermission(action, roleIds) {
         if (!['start', 'stop', 'restart'].includes(action)) return false;
+        if (!Array.isArray(roleIds)) return false;
+
+        const cleanedRoles = [...new Set(
+            roleIds
+                .filter(r => typeof r === 'string')
+                .map(r => r.trim())
+                .filter(Boolean)
+        )];
 
         const currentPerms = this.getButtonPermissions();
-        currentPerms[action] = roleIds;
+        currentPerms[action] = cleanedRoles;
 
         return database.setSetting('buttonPermissions', currentPerms);
     }
@@ -286,8 +323,20 @@ class ConfigManager {
      * @returns {Array<string>} Array of allowed levels (e.g. ['moderator', 'vip']).
      */
     getTwitchCommandPermissions() {
-        const defaultPerms = ['broadcaster', 'moderator']; // Standard: Nur Streamer & Mods
-        return database.getSetting('twitchCommandPermissions') || defaultPerms;
+        const defaultPerms = ['broadcaster', 'moderator'];
+        const validLevels = new Set(['everyone', 'subscriber', 'vip', 'moderator', 'broadcaster']);
+        const value = database.getSetting('twitchCommandPermissions');
+
+        if (!Array.isArray(value) || value.length === 0) return defaultPerms;
+
+        const normalized = [...new Set(
+            value
+                .filter(v => typeof v === 'string')
+                .map(v => v.trim().toLowerCase())
+                .filter(v => validLevels.has(v))
+        )];
+
+        return normalized.length > 0 ? normalized : defaultPerms;
     }
 
 
@@ -298,10 +347,40 @@ class ConfigManager {
      * @returns {boolean} True if successfully saved.
      */
     setTwitchCommandPermissions(levels) {
-        const validLevels = ['everyone', 'subscriber', 'vip', 'moderator', 'broadcaster'];
-        const filtered = levels.filter(l => validLevels.includes(l));
-        
-        return database.setSetting('twitchCommandPermissions', filtered);
+        const validLevels = new Set(['everyone', 'subscriber', 'vip', 'moderator', 'broadcaster']);
+
+        const cleaned = this._normalizeStringArray(levels)
+            .map(l => l.toLowerCase())
+            .filter(l => validLevels.has(l));
+
+        const unique = [...new Set(cleaned)];
+
+        if (unique.length === 0) {
+            console.error('[ConfigManager] No valid Twitch permission levels provided.');
+            return false;
+        }
+
+        if (unique.includes('everyone')) {
+            return database.setSetting('twitchCommandPermissions', ['everyone']);
+        }
+
+        return database.setSetting('twitchCommandPermissions', unique);
+    }
+
+
+    _normalizeServerId(id) {
+        if (typeof id !== 'string') return null;
+        const clean = id.trim();
+        return clean.length > 0 ? clean : null;
+    }
+
+
+    _normalizeStringArray(values) {
+        if (!Array.isArray(values)) return [];
+        return values
+            .filter(v => typeof v === 'string')
+            .map(v => v.trim())
+            .filter(Boolean);
     }
 }
 

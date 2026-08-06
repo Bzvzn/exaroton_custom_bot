@@ -72,7 +72,7 @@ class ServerManager extends EventEmitter {
     setServerTargets(serverIds) {
         if (!this.client) {
             const error = new Error('[ServerManager] Cannot set server targets: Client not initialized.');
-            error.code = 'CLIENT_NOT_INTIALIZED';
+            error.code = 'CLIENT_NOT_INITALIZED';
             throw error;
         }
 

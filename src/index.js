@@ -57,7 +57,7 @@ async function bootstrap() {
  * 
  * @param {number} code - The exit code (0 for success, 1 for error).
  */
-function shutdown(code = 0) {
+async function shutdown(code = 0) {
     console.log('\n[System] Initiating graceful shutdown...');
 
     await stopDiscordBot();

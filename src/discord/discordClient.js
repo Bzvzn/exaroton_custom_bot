@@ -72,16 +72,15 @@ export async function startDiscordBot() {
         error.code = 'DISCORD_FAIL';
         throw error;
     }
+}
 
-    
-    /**
-     * Safely disconnects the Discord bot.
-     */
-    export async function stopDiscordBot() {
-        if (discordClient && discordClient.isReady()) {
-            console.log('[Discord] Disconnecting bot gracefully...');
-            discordClient.destroy();
-            console.log('[Discord] Bot disconnected.');
-        }
+/**
+ * Safely disconnects the Discord bot.
+ */
+export async function stopDiscordBot() {
+    if (discordClient && discordClient.isReady()) {
+        console.log('[Discord] Disconnecting bot gracefully...');
+        discordClient.destroy();
+        console.log('[Discord] Bot disconnected.');
     }
 }
