@@ -1,7 +1,7 @@
 import { Events } from 'discord.js';
 import { configManager } from '../../config/configManager.js';
 import { serverManager } from '../../services/serverManager.js';
-import { canUseButton } from '../../utils/permissions.js';
+import { canUseButton } from '../utils/permissions.js';
 
 import * as setupCommand from '../commands/setup.js';
 import * as configCommand from '../commands/config.js';
