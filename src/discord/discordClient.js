@@ -1,6 +1,9 @@
 import { Client, GatewayIntentBits, Events } from 'discord.js';
 import { configManager } from '../config/configManager.js';
 import { serverManager } from '../services/serverManager.js';
+import { handleInteraction } from './events/interactionCreate.js';
+import { createStatusEmbed } from './components/embed.js';
+import { createControlButtons } from './components/buttons.js';
 
 
 export const discordClient = new Client({
@@ -17,12 +20,28 @@ export async function startDiscordBot() {
         console.log(`[Discord Event] Server ${serverId} changed status to ${newStatus}`);
         
         const setupData = configManager.getDiscordSetup();
-        if (!setupData) return;
+        if (!setupData || !setupData.channelId || !setupData.messageId) return;
 
         try {
-            // Hier updaten wir später das Embed! 
-            // (Die Funktion dafür schreiben wir im nächsten Schritt)
-            // await updateStatusEmbed(discordClient, setupData);
+            const channel = await discordClient.channels.fetch(setupData.channelId);
+            if (!channel) return;
+
+            const message = await channel.messages.fetch(setupData.messageId);
+            if (!message) return;
+
+            // Fetch fresh status data and update the embed & buttons
+            const serverData = await serverManager.getStatuses();
+            const embed = createStatusEmbed(serverData);
+
+            const serverStatus = serverData ? serverData.status : 0;
+            const buttons = createControlButtons(serverStatus);
+
+            await message.edit({
+                embeds: [embed],
+                components: [buttons]
+            });
+
+            console.log('[Discord] Status embed successfully updated in real-time.');
         } catch (error) {
             console.error('[Discord] Failed to update status embed:', error);
         }
@@ -33,11 +52,10 @@ export async function startDiscordBot() {
     // ==========================================
     discordClient.once(Events.ClientReady, (readyClient) => {
         console.log(`[Discord] Bot is online and logged in as ${readyClient.user.tag}!`);
-        // Später laden wir hier unsere Slash-Commands (/setup, /config) hoch
     });
 
     discordClient.on(Events.InteractionCreate, async (interaction) => {
-        // Hier leiten wir später Slash-Commands und Button-Klicks weiter
+        await handleInteraction(interaction);
     });
 
 
@@ -47,7 +65,7 @@ export async function startDiscordBot() {
     try {
         await discordClient.login(configManager.discordToken);
         return true;
-    } catch (error) {
+    } catch (err) {
         const error = new Error('[Discord] FATAL ERROR: Failed to login. Check your DISCORD_TOKEN.');
         error.code = 'DISCORD_FAIL';
         throw error;

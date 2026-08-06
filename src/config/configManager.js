@@ -281,30 +281,27 @@ class ConfigManager {
 
 
     /**
-     * Retrieves the required Twitch permission level to use the start command.
+     * Retrieves the allowed Twitch permission levels/roles.
      * 
-     * @returns {'everyone'|'subscriber'|'vip'|'moderator'|'broadcaster'} The permission level. Defaults to 'moderator'.
+     * @returns {Array<string>} Array of allowed levels (e.g. ['moderator', 'vip']).
      */
-    getTwitchCommandPermission() {
-        return database.getSetting('twitchCommandPermission') || 'moderator';
+    getTwitchCommandPermissions() {
+        const defaultPerms = ['broadcaster', 'moderator']; // Standard: Nur Streamer & Mods
+        return database.getSetting('twitchCommandPermissions') || defaultPerms;
     }
 
 
     /**
-     * Saves the required Twitch permission level for the start command.
+     * Updates the allowed Twitch permission levels.
      * 
-     * @param {string} permissionLevel - The required permission level.
-     * @returns {boolean} True if successfully saved, false if invalid.
+     * @param {Array<string>} levels - Array of allowed levels.
+     * @returns {boolean} True if successfully saved.
      */
-    setTwitchCommandPermission(permissionLevel) {
+    setTwitchCommandPermissions(levels) {
         const validLevels = ['everyone', 'subscriber', 'vip', 'moderator', 'broadcaster'];
-
-        if (!validLevels.includes(permissionLevel)) {
-            console.error(`[ConfigManager] Invalid Twitch permission level. Must be one of: ${validLevels.join(', ')}`);
-            return false;
-        }
-
-        return database.setSetting('twitchCommandPermission', permissionLevel);
+        const filtered = levels.filter(l => validLevels.includes(l));
+        
+        return database.setSetting('twitchCommandPermissions', filtered);
     }
 }
 
