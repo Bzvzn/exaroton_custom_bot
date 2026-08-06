@@ -1,7 +1,7 @@
 import { database } from './datas/database.js';
 import { configManager } from './config/configManager.js';
 import { serverManager } from './services/serverManager.js';
-import { discordClient, startDiscordBot } from './discord/discordClient.js';
+import { discordClient, startDiscordBot, stopDiscordBot } from './discord/discordClient.js';
 
 /**
  * The main entry point of the application.
@@ -34,12 +34,6 @@ async function bootstrap() {
         console.log('[Bootstrap] Starting Discord Bot...');
         await startDiscordBot();
 
-        // 6. Start the Twitch Bot (Platzhalter)
-        // const twitchChannel = configManager.getTwitchChannel();
-        // if (twitchChannel) {
-        //     console.log(`[Bootstrap] Starting Twitch Bot for channel: ${twitchChannel}`);
-        //     await startTwitchBot();
-        // }
 
         console.log('====================================');
         console.log('   Bot successfully initialized!    ');
@@ -61,11 +55,8 @@ async function bootstrap() {
 function shutdown(code = 0) {
     console.log('\n[System] Initiating graceful shutdown...');
 
-    // Später werden wir hier auch den Discord- und Twitch-Client sauber abmelden:
-    // if (discordClient) discordClient.destroy();
-    // if (twitchClient) twitchClient.disconnect();
+    await stopDiscordBot();
 
-    // Datenbank sicher schließen (schreibt WAL-Daten in die Hauptdatei)
     database.close();
 
     console.log('[System] Shutdown complete. Goodbye!');

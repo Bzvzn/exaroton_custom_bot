@@ -8,7 +8,7 @@ import { registerCommands } from './utils/deployCommands.js';
 
 
 export const discordClient = new Client({
-    intents: [GatewayIntentBits.Guilds] 
+    intents: [GatewayIntentBits.Guilds]
 });
 
 
@@ -19,7 +19,7 @@ export async function startDiscordBot() {
     // ==========================================
     serverManager.on('statusUpdate', async (serverId, newStatus) => {
         console.log(`[Discord Event] Server ${serverId} changed status to ${newStatus}`);
-        
+
         const setupData = configManager.getDiscordSetup();
         if (!setupData || !setupData.channelId || !setupData.messageId) return;
 
@@ -71,5 +71,17 @@ export async function startDiscordBot() {
         const error = new Error('[Discord] FATAL ERROR: Failed to login. Check your DISCORD_TOKEN.');
         error.code = 'DISCORD_FAIL';
         throw error;
+    }
+
+    
+    /**
+     * Safely disconnects the Discord bot.
+     */
+    export async function stopDiscordBot() {
+        if (discordClient && discordClient.isReady()) {
+            console.log('[Discord] Disconnecting bot gracefully...');
+            discordClient.destroy();
+            console.log('[Discord] Bot disconnected.');
+        }
     }
 }
