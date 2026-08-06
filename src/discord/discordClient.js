@@ -4,6 +4,7 @@ import { serverManager } from '../services/serverManager.js';
 import { handleInteraction } from './events/interactionCreate.js';
 import { createStatusEmbed } from './components/embed.js';
 import { createControlButtons } from './components/buttons.js';
+import { registerCommands } from './utils/deployCommands.js';
 
 
 export const discordClient = new Client({
@@ -50,8 +51,9 @@ export async function startDiscordBot() {
     // ==========================================
     // 2. DISCORD EVENTS (Ready & Interactions)
     // ==========================================
-    discordClient.once(Events.ClientReady, (readyClient) => {
+    discordClient.once(Events.ClientReady, async (readyClient) => {
         console.log(`[Discord] Bot is online and logged in as ${readyClient.user.tag}!`);
+        await registerCommands();
     });
 
     discordClient.on(Events.InteractionCreate, async (interaction) => {
