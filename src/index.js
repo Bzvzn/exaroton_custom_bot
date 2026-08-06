@@ -1,7 +1,7 @@
 import { database } from './datas/database.js';
 import { configManager } from './config/configManager.js';
 import { serverManager } from './services/serverManager.js';
-import { discordClient, startDiscordBot, stopDiscordBot } from './discord/discordClient.js';
+import { startDiscordBot, stopDiscordBot } from './discord/discordClient.js';
 import { startTwitchBot, stopTwitchBot } from './twitch/twitchClient.js';
 
 /**
@@ -77,6 +77,10 @@ process.on('SIGTERM', () => shutdown(0));
 process.on('uncaughtException', (error) => {
     console.error('[System] Uncaught Exception:', error);
     shutdown(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[System] Unhandled Promise Rejection at:', promise, 'reason:', reason);
 });
 
 // Start the application

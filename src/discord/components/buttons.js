@@ -13,33 +13,40 @@ export function createControlButtons(serverStatus = 0) {
         .setCustomId('server_start')
         .setLabel('Start')
         .setStyle(ButtonStyle.Success)
-        .setEmoji('▶️');
 
     const stopButton = new ButtonBuilder()
         .setCustomId('server_stop')
         .setLabel('Stop')
         .setStyle(ButtonStyle.Danger)
-        .setEmoji('⏹️');
 
     const restartButton = new ButtonBuilder()
         .setCustomId('server_restart')
         .setLabel('Restart')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔄');
 
-    // Exaroton Status Codes: 0 = Offline, 1 = Online, 2 = Starting, 3 = Stopping
     switch (serverStatus) {
-        case 0:
+        case 0: // Offline
+        case 7: // Crashed
             row.addComponents(startButton);
             break;
             
-        case 1:
+        case 1: // Online
             row.addComponents(stopButton, restartButton);
             break;
             
-        case 2: 
-        case 3: 
-            row.addComponents(stopButton);
+        case 2: // Starting
+        case 3: // Stopping
+        case 4: // Restarting
+        case 5: // Saving
+        case 6: //Loading
+        case 8: //Pending
+        case 9: //Transferring
+        case 10: // Preparing
+            startButton.setDisabled(true);
+            stopButton.setDisabled(true);
+            restartButton.setDisabled(true);
+            
+            row.addComponents(startButton, stopButton, restartButton);
             break;
             
         default: // Fallback

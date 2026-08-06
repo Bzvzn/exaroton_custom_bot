@@ -11,6 +11,37 @@ export const discordClient = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
 
+/**
+ * Helper function to sync the Discord embed with current server status.
+ * Can be called on startup and on Exaroton status events.
+ */
+async function syncStatusMessage() {
+    const setupData = configManager.getDiscordSetup();
+    if (!setupData || !setupData.channelId || !setupData.messageId) return;
+
+    try {
+        const channel = await discordClient.channels.fetch(setupData.channelId).catch(() => null);
+        if (!channel) return;
+
+        const message = await channel.messages.fetch(setupData.messageId).catch(() => null);
+        if (!message) return;
+
+        // Fetch fresh status data and update the embed & buttons
+        const serverData = await serverManager.getStatuses();
+        const embed = createStatusEmbed(serverData);
+        const serverStatus = serverData ? serverData.status : 0;
+        const buttons = createControlButtons(serverStatus);
+
+        await message.edit({
+            embeds: [embed],
+            components: [buttons]
+        });
+
+    } catch (error) {
+        console.error('[Discord] Failed to sync status embed:', error.message);
+    }
+}
+
 
 export async function startDiscordBot() {
 
@@ -54,6 +85,9 @@ export async function startDiscordBot() {
     discordClient.once(Events.ClientReady, async (readyClient) => {
         console.log(`[Discord] Bot is online and logged in as ${readyClient.user.tag}!`);
         await registerCommands();
+
+        console.log('[Discord] Performing initial sync of status embed...');
+        await syncStatusMessage();
     });
 
     discordClient.on(Events.InteractionCreate, async (interaction) => {

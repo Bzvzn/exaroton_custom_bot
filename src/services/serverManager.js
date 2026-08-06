@@ -96,7 +96,7 @@ class ServerManager extends EventEmitter {
 
             server.on('status', (newStatus) => {
                 console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
-                
+
                 this.emit('statusUpdate', server.id, newStatus);
             });
         }
@@ -122,17 +122,30 @@ class ServerManager extends EventEmitter {
         try {
             const statuses = await Promise.all(
                 this.servers.map(async (server) => {
-                    const serverData = await server.get();
-                    return {
-                        id: server.id,
-                        name: serverData.name,
-                        status: serverData.status,
-                        address: serverData.address,
-                        motd: serverData.motd,
-                        port: serverData.port,
-                        players: serverData.players,
-                        software: serverData.software
-                    };
+                    try {
+                        const serverData = await server.get();
+                        return {
+                            id: server.id,
+                            name: serverData.name,
+                            status: serverData.status,
+                            address: serverData.address,
+                            motd: serverData.motd,
+                            port: serverData.port,
+                            players: serverData.players,
+                            software: serverData.software
+                        };
+                    } catch (innerError) {
+                        console.error(`[ServerManager] Failed to fetch data for server ${server.id}:`, innerError.message);
+                        return {
+                            id: server.id,
+                            name: 'Unknown/Error',
+                            status: 0,
+                            address: 'unknown',
+                            port: 0,
+                            players: { count: 0, max: 0, list: [] },
+                            software: { name: 'Unknown', version: 'Unknown' }
+                        };
+                    }
                 })
             );
 
@@ -204,14 +217,19 @@ class ServerManager extends EventEmitter {
     async stopAllServers() {
         if (this.servers.length === 0) return false;
 
-        try {
-            await Promise.all(this.servers.map(server => server.stop()));
-            console.log('[ServerManager] Stop command sent to ALL servers.');
-            return true;
-        } catch (error) {
-            console.error('[ServerManager] Failed to stop servers:', error);
+        console.log('[ServerManager] Sending stop command to ALL servers...');
+
+        const results = await Promise.allSettled(this.servers.map(server => server.stop()));
+
+        const failed = results.filter(res => res.status === 'rejected');
+
+        if (failed.length > 0) {
+            console.warn(`[ServerManager] Failed to stop ${failed.length} server(s). Check API limits or server states.`);
             return false;
         }
+
+        console.log('[ServerManager] All servers stopped successfully.');
+        return true;
     }
 
 
@@ -223,14 +241,19 @@ class ServerManager extends EventEmitter {
     async restartAllServers() {
         if (this.servers.length === 0) return false;
 
-        try {
-            await Promise.all(this.servers.map(server => server.restart()));
-            console.log('[ServerManager] Restart command sent to ALL servers.');
-            return true;
-        } catch (error) {
-            console.error('[ServerManager] Failed to restart servers:', error);
+        console.log('[ServerManager] Sending restart command to ALL servers...');
+
+        const results = await Promise.allSettled(this.servers.map(server => server.restart()));
+
+        const failed = results.filter(res => res.status === 'rejected');
+
+        if (failed.length > 0) {
+            console.warn(`[ServerManager] Failed to restart ${failed.length} server(s). Check API limits or server states.`);
             return false;
         }
+
+        console.log('[ServerManager] All servers restarted successfully.');
+        return true;
     }
 }
 

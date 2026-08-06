@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { serverManager } from '../../services/serverManager.js';
 import { configManager } from '../../config/configManager.js';
 import { createStatusEmbed } from '../components/embed.js';
@@ -8,6 +8,7 @@ import { isServerAdmin } from '../utils/permissions.js';
 export const data = new SlashCommandBuilder()
     .setName('setup')
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDescription('Deploys the live Minecraft server status embed and control buttons.');
 
 export async function execute(interaction) {

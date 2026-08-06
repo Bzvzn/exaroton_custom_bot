@@ -1,4 +1,3 @@
-import { Events } from 'discord.js';
 import { configManager } from '../../config/configManager.js';
 import { serverManager } from '../../services/serverManager.js';
 import { canUseButton } from '../utils/permissions.js';
@@ -30,6 +29,13 @@ export async function handleInteraction(interaction) {
 
             const action = customId.replace('server_', '');
 
+            if (configManager.isMaintenanceMode()) {
+                return interaction.reply({
+                    content: '🔧 **Maintenance mode is active!** You cannot start or stop the server right now. Please try again later.',
+                    ephemeral: true
+                });
+            }
+
             if (!canUseButton(interaction.member, action)) {
                 return interaction.reply({
                     content: `❌ You do not have the required role permission to use the **${action}** button.`,
@@ -40,37 +46,33 @@ export async function handleInteraction(interaction) {
             await interaction.deferReply({ ephemeral: true });
 
             let success = false;
-            let actionName = '';
 
             if (action === 'start') {
-                actionName = 'start';
                 success = await serverManager.startPrimaryServer();
             } else if (action === 'stop') {
-                actionName = 'stop';
                 success = await serverManager.stopAllServers();
             } else if (action === 'restart') {
-                actionName = 'restart';
                 success = await serverManager.restartAllServers();
             }
 
             if (success) {
                 await interaction.editReply({
-                    content: `✅ Successfully sent **${actionName}** command to the server(s)! Status will update shortly.`
+                    content: `✅ Successfully sent **${action}** command to the server(s)! Status will update shortly.`
                 });
             } else {
                 await interaction.editReply({
-                    content: `❌ Failed to execute **${actionName}** command. Check bot logs for details.`
+                    content: `❌ Failed to execute **${action}** command. Check bot logs for details.`
                 });
             }
         }
     } catch (error) {
         console.error('[InteractionCreate] Error handling interaction:', error);
-        
+
         const errorMessage = { content: '❌ An error occurred while executing this action.', ephemeral: true };
         if (interaction.deferred || interaction.replied) {
-            await interaction.followUp(errorMessage).catch(() => {});
+            await interaction.followUp(errorMessage).catch(() => { });
         } else {
-            await interaction.reply(errorMessage).catch(() => {});
+            await interaction.reply(errorMessage).catch(() => { });
         }
     }
 }

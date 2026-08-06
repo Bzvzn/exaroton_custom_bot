@@ -33,6 +33,11 @@ export async function startTwitchBot() {
 
         if (userMessage !== targetCommand) return;
 
+        if (configManager.isMaintenanceMode()) {
+            console.log(`[Twitch] User ${tags.username} tried to start the server, but Maintenance Mode is active.`);
+            return; 
+        }
+
         if (!hasPermission(tags)) {
             console.log(`[Twitch] User ${tags.username} tried to use ${targetCommand}, but lacked permissions.`);
             return;

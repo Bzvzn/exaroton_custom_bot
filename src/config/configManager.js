@@ -367,10 +367,32 @@ class ConfigManager {
         return database.setSetting('twitchCommandPermissions', unique);
     }
 
+    
+    // ==========================================
+    // MAINTENANCE MODE (Wartungsmodus)
+    // ==========================================
+
+    /**
+     * Checks if the maintenance mode is currently active.
+     * @returns {boolean} True if active, false otherwise.
+     */
+    isMaintenanceMode() {
+        return database.getSetting('maintenanceMode') || false;
+    }
+
+    /**
+     * Enables or disables the maintenance mode.
+     * @param {boolean} state - True to enable, false to disable.
+     * @returns {boolean} True if successfully saved.
+     */
+    setMaintenanceMode(state) {
+        return database.setSetting('maintenanceMode', !!state);
+    }
+
 
     _normalizeServerId(id) {
         if (typeof id !== 'string') return null;
-        const clean = id.trim();
+        const clean = id.trim().replace(/^#/, '');
         return clean.length > 0 ? clean : null;
     }
 
