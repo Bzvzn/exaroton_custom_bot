@@ -121,14 +121,14 @@ class ConfigManager {
      */
     addBackendServerId(newId) {
         const currentIds = this.getServerIds();
-        
+
         if (currentIds.includes(newId)) {
             console.log(`[ConfigManager] Server ${newId} is already in the list.`);
             return false;
         }
 
         currentIds.push(newId);
-        return this.setServerIds(currentIds); 
+        return this.setServerIds(currentIds);
     }
 
 
@@ -138,9 +138,9 @@ class ConfigManager {
      * @param {string} proxyId - The Exaroton ID of the proxy server.
      * @returns {boolean} True if successfully saved.
      */
-    setProxyServerId(proxyId) {
+    setPrimaryServerId(proxyId) {
         const currentIds = this.getServerIds();
-        
+
         if (currentIds.length === 0) {
             return this.setServerIds([proxyId]);
         }
@@ -154,12 +154,12 @@ class ConfigManager {
      * Retrieves a structured overview of the currently configured servers.
      * Useful for setup displays, debugging, or Discord info commands.
      * 
-     * @returns {{ hasServers: boolean, total: number, proxy: string|null, backends: Array<string> }} 
+     * @returns {{ hasServers: boolean, total: number, primary: string|null, backends: Array<string> }} 
      * An object containing the categorized server IDs.
      */
     getServerConfigOverview() {
         const ids = this.getServerIds();
-        
+
         if (ids.length === 0) {
             return {
                 hasServers: false,
@@ -201,6 +201,50 @@ class ConfigManager {
             return false;
         }
         return database.setSetting('discordSetup', { channelId, messageId });
+    }
+
+    // ==========================================
+    // TWITCH CONFIGURATION
+    // ==========================================
+
+
+    /**
+     * Gets the command name the Twitch bot should listen to from config.json.
+     * Defaults to '!start' if not specified.
+     * 
+     * @returns {string} The command string (e.g., '!startmc').
+     */
+    getTwitchCommand() {
+        return this.staticConfig?.twitch?.commandName || '!startmc';
+    }
+
+
+    /**
+     * Retrieves the connected Twitch channel name from the database.
+     * 
+     * @returns {string|null} The Twitch channel name, or null if not configured.
+     */
+    getTwitchChannel() {
+        return database.getSetting('twitchChannel');
+    }
+
+    
+    /**
+     * Saves the Twitch channel name to the database.
+     * 
+     * @param {string} channelName - The name of the Twitch channel to monitor.
+     * @returns {boolean} True if successfully saved, false otherwise.
+     */
+    setTwitchChannel(channelName) {
+        if (!channelName || typeof channelName !== 'string') {
+            console.error('[ConfigManager] setTwitchChannel requires a valid string.');
+            return false;
+        }
+
+        // Remove '#' if the user accidentally included it, tmi.js handles it
+        const cleanChannelName = channelName.replace(/^#/, '').toLowerCase();
+
+        return database.setSetting('twitchChannel', cleanChannelName);
     }
 }
 
