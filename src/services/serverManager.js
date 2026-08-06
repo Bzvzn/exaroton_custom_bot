@@ -1,4 +1,5 @@
 import { Client } from "exaroton";
+import { EventEmitter } from "events";
 
 /**
  * @typedef {Object} ServerStatusData
@@ -17,9 +18,11 @@ import { Client } from "exaroton";
 /**
  * Manages the connection and commands to the Exaroton API.
  * Supports both Single-Server and Multi-Server (Proxy + Backends) setups.
+ * Emits a 'statusUpdate' event whenever a server's status changes.
  */
-class ServerManager {
+class ServerManager extends EventEmitter {
     constructor() {
+        super();
 
         /**
          * @type {Client|null} The Exaroton API Client instance.
@@ -73,12 +76,30 @@ class ServerManager {
             throw error;
         }
 
+        for (const oldServer of this.servers) {
+            try {
+                oldServer.unsubscribe();
+                oldServer.removeAllListeners('status');
+            } catch (e) {
+            }
+        }
+
         const ids = Array.isArray(serverIds)
             ? serverIds.filter(Boolean)
             : (serverIds ? [serverIds] : []);
 
         this.serverIds = ids;
         this.servers = ids.map(id => this.client.server(id));
+
+        for (const server of this.servers) {
+            server.subscribe();
+
+            server.on('status', (newStatus) => {
+                console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
+                
+                this.emit('statusUpdate', server.id, newStatus);
+            });
+        }
 
         console.log(`[ServerManager] Target servers updated. Monitoring ${this.servers.length} server(s).`);
         if (this.servers.length > 0) {
@@ -96,7 +117,7 @@ class ServerManager {
      * @returns {Promise<ServerStatusData|null>} The aggregated server data object, or null if empty/failed.
      */
     async getStatuses() {
-        if (this.servers.length === 0) return [];
+        if (this.servers.length === 0) return null;
 
         try {
             const statuses = await Promise.all(
@@ -121,7 +142,7 @@ class ServerManager {
 
             return {
                 ...primary,
-                backend: backends
+                backends: backends
             };
 
         } catch (error) {
