@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { serverManager } from '../../services/serverManager.js';
 import { configManager } from '../../config/configManager.js';
 import { createStatusEmbed } from '../components/embed.js';
