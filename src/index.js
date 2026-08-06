@@ -1,6 +1,7 @@
 import { database } from './datas/database.js';
 import { configManager } from './config/configManager.js';
 import { serverManager } from './services/serverManager.js';
+import { discordClient, startDiscordBot } from './discord/discordClient.js';
 
 /**
  * The main entry point of the application.
@@ -29,9 +30,9 @@ async function bootstrap() {
             console.log('[Bootstrap] No Exaroton servers configured yet. You can set them up via Discord later.');
         }
 
-        // 5. Start the Discord Bot (Platzhalter)
-        // console.log('[Bootstrap] Starting Discord Bot...');
-        // await startDiscordBot();
+        // 5. Start the Discord Bot
+        console.log('[Bootstrap] Starting Discord Bot...');
+        await startDiscordBot();
 
         // 6. Start the Twitch Bot (Platzhalter)
         // const twitchChannel = configManager.getTwitchChannel();
