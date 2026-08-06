@@ -111,6 +111,10 @@ class ConfigManager {
             return false;
         }
 
+        if (ids.length === 0) {
+            return database.setSetting('serverIds', []);
+        }
+
         const cleaned = ids
             .map(id => this._normalizeServerId(id))
             .filter(Boolean);
@@ -367,7 +371,7 @@ class ConfigManager {
         return database.setSetting('twitchCommandPermissions', unique);
     }
 
-    
+
     // ==========================================
     // MAINTENANCE MODE (Wartungsmodus)
     // ==========================================

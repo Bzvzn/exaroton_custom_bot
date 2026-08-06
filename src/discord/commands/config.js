@@ -1,7 +1,8 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { configManager } from '../../config/configManager.js';
 import { serverManager } from '../../services/serverManager.js';
 import { isServerAdmin } from '../utils/permissions.js';
+import { startTwitchBot, stopTwitchBot } from '../../twitch/twitchClient.js';
 
 export const data = new SlashCommandBuilder()
     .setName('config')
@@ -95,7 +96,7 @@ export async function execute(interaction) {
     if (!isServerAdmin(interaction.member)) {
         return interaction.reply({
             content: '❌ You do not have permission to use this command.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral 
         });
     }
 
@@ -125,36 +126,64 @@ export async function execute(interaction) {
             )
             .setTimestamp();
 
-        return interaction.reply({ embeds: [embed], ephemeral: true });
+        return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral  });
     }
 
     if (subcommand === 'maintenance') {
         const enabled = interaction.options.getBoolean('enabled');
         configManager.setMaintenanceMode(enabled);
 
+        serverManager.emit('targetsChanged');
+
         if (enabled) {
             return interaction.reply({
                 content: '🔧 **Maintenance Mode ENABLED!** The server cannot be controlled via buttons or Twitch until disabled.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral 
             });
         } else {
             return interaction.reply({
                 content: '✅ **Maintenance Mode DISABLED!** Server control via buttons and Twitch is active again.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral 
             });
         }
     }
 
     if (subcommand === 'servers') {
         const rawIds = interaction.options.getString('ids');
-        const ids = rawIds.split(',').map(id => id.trim()).filter(Boolean);
+        let ids = rawIds.split(',').map(id => id.replace(/#/g, '').trim()).filter(Boolean);
 
-        configManager.setServerIds(ids);
-        serverManager.setServerTargets(ids);
+        if (ids.length === 1 && (ids[0].toLowerCase() === 'clear' || ids[0].toLowerCase() === 'none')) {
+            await serverManager.setServerTargets([]);
+            configManager.setServerIds([]);
 
-        return interaction.reply({
-            content: `✅ Successfully updated server targets! Monitoring ${ids.length} server(s).`,
-            ephemeral: true
+            return interaction.reply({
+                content: '✅ All monitored servers have been cleared!',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const validIds = await serverManager.setServerTargets(ids);
+
+        if (validIds.length === 0) {
+            return interaction.reply({ 
+                content: '❌ **Error:** None of the provided server IDs are valid on Exaroton. Nothing was changed.', 
+                flags: MessageFlags.Ephemeral 
+            });
+        }
+
+        if (validIds.length < ids.length) {
+            configManager.setServerIds(validIds);
+            return interaction.reply({ 
+                content: `⚠️ **Warning:** Some server IDs were invalid and ignored. Successfully monitoring ${validIds.length} valid server(s).`, 
+                flags: MessageFlags.Ephemeral 
+            });
+        }
+
+        configManager.setServerIds(validIds);
+
+        return interaction.reply({ 
+            content: `✅ Successfully updated server targets! Monitoring ${validIds.length} server(s).`, 
+            flags: MessageFlags.Ephemeral 
         });
     }
 
@@ -162,9 +191,12 @@ export async function execute(interaction) {
         const channel = interaction.options.getString('channel');
         configManager.setTwitchChannel(channel);
 
+        await stopTwitchBot();
+        await startTwitchBot();
+
         return interaction.reply({
             content: `✅ Twitch channel successfully set to: \`${channel}\``,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral 
         });
     }
 
@@ -184,7 +216,7 @@ export async function execute(interaction) {
 
         return interaction.reply({
             content: `✅ Twitch permissions updated. Allowed levels: \`${currentPerms.join(', ')}\``,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral 
         });
     }
 
@@ -202,14 +234,14 @@ export async function execute(interaction) {
             }
             return interaction.reply({
                 content: `✅ Successfully added role ${role.name} to the allowed list for the **${action}** button.`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral 
             });
         } else {
             currentPerms[action] = currentPerms[action].filter(id => id !== role.id);
             configManager.setButtonPermission(action, currentPerms[action]);
             return interaction.reply({
                 content: `✅ Successfully removed role ${role.name} from the allowed list for the **${action}** button.`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral 
             });
         }
     }

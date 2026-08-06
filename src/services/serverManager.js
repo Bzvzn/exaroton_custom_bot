@@ -69,44 +69,78 @@ class ServerManager extends EventEmitter {
      * @returns {boolean} True if servers were successfully configured.
      * @throws {Error} If the client was not initialized first.
      */
-    setServerTargets(serverIds) {
+    async setServerTargets(serverIds) {
         if (!this.client) {
             const error = new Error('[ServerManager] Cannot set server targets: Client not initialized.');
             error.code = 'CLIENT_NOT_INITALIZED';
             throw error;
         }
 
+        const rawIds = Array.isArray(serverIds)
+            ? serverIds.filter(Boolean)
+            : (serverIds ? [serverIds] : []);
+
+        const ids = [...new Set(rawIds.map(id => id.trim()))];
+
+        const validIds = [];
+        const validServers = [];
+
+        // Verify each ID using server.get() before subscribing
+        for (const id of ids) {
+            try {
+                const server = this.client.server(id);
+
+                const serverData = await server.get();
+
+                if (!serverData || !serverData.id) {
+                    throw new Error(`Invalid server data received for ID: ${id}`);
+                }
+
+                // If we reach here, the ID is valid
+                server.subscribe();
+
+                server.on('status', (newStatus) => {
+                    console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
+                    this.emit('statusUpdate', server.id, newStatus);
+                });
+
+                validIds.push(id);
+                validServers.push(server);
+            } catch (error) {
+                console.warn(`[ServerManager] Invalid or unreachable Server ID ignored: ${id}`);
+            }
+        }
+
+        if (ids.length > 0 && validIds.length === 0) {
+            console.warn('[ServerManager] Aborting target update: All provided IDs were invalid. Keeping previous servers.');
+            return [];
+        }
+
         for (const oldServer of this.servers) {
             try {
-                oldServer.unsubscribe();
-                oldServer.removeAllListeners('status');
+                if (typeof oldServer.unsubscribe === 'function') {
+                    try {
+                        oldServer.unsubscribe();
+                    } catch (e) { }
+                }
+                if (typeof oldServer.removeAllListeners === 'function') {
+                    oldServer.removeAllListeners('status');
+                }
             } catch (e) {
             }
         }
 
-        const ids = Array.isArray(serverIds)
-            ? serverIds.filter(Boolean)
-            : (serverIds ? [serverIds] : []);
+        this.serverIds = validIds;
+        this.servers = validServers;
 
-        this.serverIds = ids;
-        this.servers = ids.map(id => this.client.server(id));
-
-        for (const server of this.servers) {
-            server.subscribe();
-
-            server.on('status', (newStatus) => {
-                console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
-
-                this.emit('statusUpdate', server.id, newStatus);
-            });
-        }
+        this.emit('targetsChanged', validIds);
 
         console.log(`[ServerManager] Target servers updated. Monitoring ${this.servers.length} server(s).`);
         if (this.servers.length > 0) {
             console.log(`[ServerManager] Primary (Proxy) Server ID: ${this.serverIds[0]}`);
         }
 
-        return true;
+        return validIds;
     }
 
 

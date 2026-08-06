@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
 import { serverManager } from '../../services/serverManager.js';
 import { configManager } from '../../config/configManager.js';
 import { createStatusEmbed } from '../components/embed.js';
@@ -15,11 +15,11 @@ export async function execute(interaction) {
     if (!isServerAdmin(interaction.member)) {
         return interaction.reply({
             content: '❌ You do not have permission to use this command.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral 
         });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral  });
 
     try {
         const serverData = await serverManager.getStatuses();

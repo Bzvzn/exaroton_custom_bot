@@ -79,6 +79,11 @@ export async function startDiscordBot() {
         }
     });
 
+    serverManager.on('targetsChanged', async () => {
+        console.log('[Discord] Target servers changed, syncing embed...');
+        await syncStatusMessage();
+    });
+
     // ==========================================
     // 2. DISCORD EVENTS (Ready & Interactions)
     // ==========================================
