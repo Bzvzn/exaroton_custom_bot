@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { database } from '../data/database.js';
+import { database } from '../datas/database.js';
 
 /**
  * @typedef {Object} DiscordSetupData
@@ -228,7 +228,7 @@ class ConfigManager {
         return database.getSetting('twitchChannel');
     }
 
-    
+
     /**
      * Saves the Twitch channel name to the database.
      * 
@@ -245,6 +245,66 @@ class ConfigManager {
         const cleanChannelName = channelName.replace(/^#/, '').toLowerCase();
 
         return database.setSetting('twitchChannel', cleanChannelName);
+    }
+
+    // ==========================================
+    // ROLE PERMISSIONS (Buttons)
+    // ==========================================
+
+
+    /**
+     * Retrieves the role permissions for discord server buttons.
+     * 
+     * @returns {{ start: Array<string>, stop: Array<string>, restart: Array<string> }}
+     */
+    getButtonPermissions() {
+        const defaultPerms = { start: [], stop: [], restart: [] };
+        return database.getSetting('buttonPermissions') || defaultPerms;
+    }
+
+
+    /**
+     * Updates the allowed roles for a specific button action.
+     * 
+     * @param {'start'|'stop'|'restart'} action - The button action.
+     * @param {Array<string>} roleIds - Array of Discord Role IDs allowed to use this action.
+     * @returns {boolean} True if successfully saved.
+     */
+    setButtonPermission(action, roleIds) {
+        if (!['start', 'stop', 'restart'].includes(action)) return false;
+
+        const currentPerms = this.getButtonPermissions();
+        currentPerms[action] = roleIds;
+
+        return database.setSetting('buttonPermissions', currentPerms);
+    }
+
+
+    /**
+     * Retrieves the required Twitch permission level to use the start command.
+     * 
+     * @returns {'everyone'|'subscriber'|'vip'|'moderator'|'broadcaster'} The permission level. Defaults to 'moderator'.
+     */
+    getTwitchCommandPermission() {
+        return database.getSetting('twitchCommandPermission') || 'moderator';
+    }
+
+
+    /**
+     * Saves the required Twitch permission level for the start command.
+     * 
+     * @param {string} permissionLevel - The required permission level.
+     * @returns {boolean} True if successfully saved, false if invalid.
+     */
+    setTwitchCommandPermission(permissionLevel) {
+        const validLevels = ['everyone', 'subscriber', 'vip', 'moderator', 'broadcaster'];
+
+        if (!validLevels.includes(permissionLevel)) {
+            console.error(`[ConfigManager] Invalid Twitch permission level. Must be one of: ${validLevels.join(', ')}`);
+            return false;
+        }
+
+        return database.setSetting('twitchCommandPermission', permissionLevel);
     }
 }
 
