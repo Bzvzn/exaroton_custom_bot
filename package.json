@@ -1,0 +1,28 @@
+{
+  "name": "exaroton_bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bzvzn/exaroton_custom_bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Bzvzn/exaroton_custom_bot/issues"
+  },
+  "homepage": "https://github.com/Bzvzn/exaroton_custom_bot#readme",
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "exaroton": "^2.0.2",
+    "tmi.js": "^1.8.5"
+  }
+}
