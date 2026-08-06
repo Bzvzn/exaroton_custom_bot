@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { configManager } from '../../config/configManager.js';
 import { serverManager } from '../../services/serverManager.js';
-import { isServerAdmin } from '../../utils/permissions.js';
+import { isServerAdmin } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
     .setName('config')
