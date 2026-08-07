@@ -4,9 +4,20 @@ import { serverManager } from './services/serverManager.js';
 import { startDiscordBot, stopDiscordBot } from './discord/discordClient.js';
 import { startTwitchBot, stopTwitchBot } from './twitch/twitchClient.js';
 
+
 /**
- * The main entry point of the application.
- * Initializes all services in the correct order.
+ * Main application bootstrap function.
+ * Orchestrates step-by-step startup sequence:
+ * 1. Initializes SQLite persistence database.
+ * 2. Loads and validates environment variables and static configurations.
+ * 3. Initializes Exaroton API client and binds saved server target IDs.
+ * 4. Launches Discord bot client and deploys slash commands.
+ * 5. Connects Twitch chat client if a channel is configured.
+ * 
+ * @async
+ * @function bootstrap
+ * @returns {Promise<void>} Resolves when all sub-services have successfully initialized.
+ * @throws {Error} Catches fatal startup errors, logs details, and triggers immediate process exit (`shutdown(1)`).
  */
 async function bootstrap() {
     try {
@@ -46,16 +57,19 @@ async function bootstrap() {
 
     } catch (error) {
         console.error('[Bootstrap] FATAL ERROR during startup:', error);
-        shutdown(1); // Beendet das Programm mit einem Fehlercode
+        shutdown(1); // Exit process with failure code
     }
 }
 
 
 /**
- * Handles graceful shutdown of all services.
- * Ensures data is saved and connections are closed properly.
+ * Handles graceful shutdown sequence for the application.
+ * Safely disconnects Discord and Twitch clients and flushes/closes SQLite database connections.
  * 
- * @param {number} code - The exit code (0 for success, 1 for error).
+ * @async
+ * @function shutdown
+ * @param {number} [code=0] - Exit status code passed to `process.exit()` (0 = normal termination, 1 = error exit).
+ * @returns {Promise<never>} Terminates Node.js execution.
  */
 async function shutdown(code = 0) {
     console.log('\n[System] Initiating graceful shutdown...');
@@ -70,18 +84,38 @@ async function shutdown(code = 0) {
 }
 
 
+/**
+ * Process event listener for OS interrupt signals (e.g., Ctrl+C in console).
+ * Triggers graceful shutdown with exit code 0.
+ */
 process.on('SIGINT', () => shutdown(0));
+
+
+/**
+ * Process event listener for termination signals (e.g., PM2 stop/restart or system daemon termination).
+ * Triggers graceful shutdown with exit code 0.
+ */
 process.on('SIGTERM', () => shutdown(0));
 
 
+/**
+ * Global exception handler for unhandled synchronous errors.
+ * Logs error details to console and triggers forced teardown with exit code 1.
+ */
 process.on('uncaughtException', (error) => {
     console.error('[System] Uncaught Exception:', error);
     shutdown(1);
 });
 
+
+/**
+ * Global rejection handler for unhandled asynchronous promise rejections.
+ * Logs target promise and rejection reason for diagnostic debugging.
+ */
 process.on('unhandledRejection', (reason, promise) => {
     console.error('[System] Unhandled Promise Rejection at:', promise, 'reason:', reason);
 });
 
-// Start the application
+
+// Execute entry point
 bootstrap();

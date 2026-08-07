@@ -3,26 +3,40 @@ import fs from 'fs';
 import path from "path";
 import { fileURLToPath } from 'url';
 
+/**
+ * @typedef {Object} SettingItem
+ * @property {string} key - Unique identifier for the setting.
+ * @property {*} value - Value to be stored (must be JSON-serializable).
+ */
+
 
 /**
- * Manages the SQLite database connection and provides a Key-Value store 
- * for dynamic bot configuration and settings.
+ * Key-Value store manager powered by SQLite (`better-sqlite3`).
+ * Provides high-performance persistence for dynamic bot configurations and settings.
  */
 class DatabaseManager {
+
+    /**
+     * Instantiates the DatabaseManager.
+     * Sets the initial active database instance reference to null.
+     */
     constructor() {
         /**
-         * @type {Database.Database|null} The active SQLite database instance.
+         * The active SQLite database connection instance.
+         * @type {Database.Database|null}
          */
         this.db = null;
     }
 
 
     /**
-     * Initializes the database connection, ensures the directory exists, 
-     * applies optimal Pragmas, and creates the settings table.
+     * Initializes the SQLite database connection.
+     * Ensures target directory existence, configures WAL mode and performance Pragmas,
+     * and sets up the primary Key-Value table structure.
      * 
-     * @param {string|null} [customPath=null] - Optional absolute path for the .db file. Defaults to '../../data/main.db'.
-     * @throws {Error} If the database connection fails.
+     * @param {string|null} [customPath=null] - Absolute path for the .db file. Defaults to '../../data/main.db'.
+     * @returns {void}
+     * @throws {Error} Throws an error with code 'DB_INIT_ERROR' if connection or initialization fails.
      */
     init(customPath = null) {
         const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -63,10 +77,11 @@ class DatabaseManager {
 
 
     /**
-     * Retrieves a stored setting from the database and parses it from JSON.
+     * Retrieves and parses a stored setting by its unique key.
      * 
-     * @param {string} key - The unique identifier/name of the setting.
-     * @returns {any|null} The parsed setting value, or null if it doesn't exist or an error occurs.
+     * @template T
+     * @param {string} key - Unique key identifier of the setting.
+     * @returns {T|null} The parsed JSON value of the setting, or null if uninitialized, missing, or corrupt.
      */
     getSetting(key) {
         if (!this.db) return null;
@@ -84,12 +99,12 @@ class DatabaseManager {
 
 
     /**
-     * Inserts or updates a single setting in the database using a transaction.
-     * The value is automatically stringified to JSON.
+     * Inserts or updates a single setting within an atomic SQLite transaction.
+     * Serializes the value parameter to JSON before persisting.
      * 
-     * @param {string} key - The unique identifier/name of the setting.
-     * @param {any} value - The data to store (must be JSON serializable).
-     * @returns {boolean} True if the save was successful, false otherwise.
+     * @param {string} key - Unique key identifier for the setting.
+     * @param {*} value - Data payload to store (must be JSON-serializable).
+     * @returns {boolean} True if successfully committed; false if database is uninitialized or write fails.
      */
     setSetting(key, value) {
         if (!this.db) return false;
@@ -115,11 +130,11 @@ class DatabaseManager {
 
 
     /**
-     * Inserts or updates multiple settings at once using a bulk transaction.
-     * If one fails, the entire transaction is rolled back.
+     * Inserts or updates multiple settings atomically using a bulk transaction.
+     * If any single operation fails, the entire transaction is rolled back.
      * 
-     * @param {Array<{key: string, value: any}>} settingsArray - Array of setting objects to store.
-     * @returns {boolean} True if all settings were saved successfully, false if the transaction rolled back.
+     * @param {SettingItem[]} settingsArray - Array of setting objects containing key and value properties.
+     * @returns {boolean} True if all items were committed; false if database is uninitialized or transaction rolled back.
      */
     setMultipleSettings(settingsArray) {
         if (!this.db) return false;
@@ -147,8 +162,10 @@ class DatabaseManager {
 
 
     /**
-     * Safely closes the database connection.
-     * Should be called during the Node.js graceful shutdown process.
+     * Gracefully closes the active SQLite database connection.
+     * Should be integrated into process exit signals (SIGINT, SIGTERM) during teardown.
+     * 
+     * @returns {void}
      */
     close() {
         if (this.db) {
@@ -164,4 +181,5 @@ class DatabaseManager {
 }
 
 
+// Export singleton instance
 export const database = new DatabaseManager();

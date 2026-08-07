@@ -1,10 +1,23 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
+
 /**
- * Creates the interactive control buttons based on the current server status.
+ * Exaroton Server Status Code Mapping:
+ * 0 = Offline, 1 = Online, 2 = Starting, 3 = Stopping, 4 = Restarting,
+ * 5 = Saving, 6 = Loading, 7 = Crashed, 8 = Pending, 9 = Transferring, 10 = Preparing
+ */
+
+/**
+ * Creates and configures interactive Discord action row buttons dynamically
+ * based on the current Exaroton server lifecycle status.
+ *
+ * - **Offline (0) / Crashed (7):** Renders active 'Start' button.
+ * - **Online (1):** Renders active 'Stop' and 'Restart' buttons.
+ * - **Transitional States (2-6, 8-10):** Renders disabled 'Start', 'Stop', and 'Restart' buttons.
+ * - **Fallback:** Renders enabled 'Start', 'Stop', and 'Restart' buttons.
  * 
- * @param {number} [serverStatus=0] - Exaroton status code (0 = Offline, 1 = Online, 2 = Starting, 3 = Stopping)
- * @returns {ActionRowBuilder} The action row containing only the relevant buttons.
+ * @param {number} [serverStatus=0] - Exaroton status code representing state. Defaults to 0 (Offline).
+ * @returns {ActionRowBuilder<ButtonBuilder>} An ActionRow containing configured ButtonBuilder components.
  */
 export function createControlButtons(serverStatus = 0) {
     const row = new ActionRowBuilder();
@@ -49,7 +62,7 @@ export function createControlButtons(serverStatus = 0) {
             row.addComponents(startButton, stopButton, restartButton);
             break;
             
-        default: // Fallback
+        default: // Fallback for unknown status codes
             row.addComponents(startButton, stopButton, restartButton);
             break;
     }

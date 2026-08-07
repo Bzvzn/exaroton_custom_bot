@@ -2,8 +2,22 @@ import tmi from 'tmi.js';
 import { configManager } from '../config/configManager.js';
 import { serverManager } from '../services/serverManager.js';
 
+
+/**
+ * Singleton instance of the active Twitch IRC client (`tmi.js`).
+ * @type {tmi.Client|null}
+ */
 let twitchClient = null;
 
+
+/**
+ * Initializes and connects the Twitch chat bot client.
+ * Subscribes to chat message events, listens for designated server control commands (e.g. `!startmc`),
+ * and enforces maintenance mode checks along with user permission evaluations.
+ * 
+ * @returns {Promise<void>} Resolves when the client successfully connects or safely exits if unconfigured/unreachable.
+ * @throws {Error} Logs connection errors during `twitchClient.connect()` or server trigger failures.
+ */
 export async function startTwitchBot() {
     const channel = configManager.getTwitchChannel();
 
@@ -25,6 +39,10 @@ export async function startTwitchBot() {
     }
 
 
+    /**
+     * Event listener for Twitch chat messages.
+     * Evaluates incoming message content against configured command triggers and checks user permissions.
+     */
     twitchClient.on('message', async (channel, tags, message, self) => {
         if (self) return;
 
@@ -33,11 +51,13 @@ export async function startTwitchBot() {
 
         if (userMessage !== targetCommand) return;
 
+        // Block command execution if maintenance mode is enabled
         if (configManager.isMaintenanceMode()) {
             console.log(`[Twitch] User ${tags.username} tried to start the server, but Maintenance Mode is active.`);
             return; 
         }
 
+        // Validate user permission level
         if (!hasPermission(tags)) {
             console.log(`[Twitch] User ${tags.username} tried to use ${targetCommand}, but lacked permissions.`);
             return;
@@ -53,8 +73,12 @@ export async function startTwitchBot() {
     });
 }
 
+
 /**
- * Safely disconnects the Twitch bot.
+ * Gracefully disconnects the active Twitch chat bot client session if open.
+ * Recommended during application shutdown or channel reconfiguration.
+ * 
+ * @returns {Promise<void>} Resolves when the client disconnection process completes.
  */
 export async function stopTwitchBot() {
     if (twitchClient && twitchClient.readyState() === 'OPEN') {
@@ -66,7 +90,12 @@ export async function stopTwitchBot() {
 
 
 /**
- * Checks if the user has the required Twitch permissions.
+ * Evaluates whether a Twitch user holds the required permissions to execute server triggers.
+ * Checks badges and user tags against permitted roles stored in the database ('everyone', 'broadcaster', 'moderator', 'vip', 'subscriber').
+ * 
+ * @private
+ * @param {import('tmi.js').ChatUserstate} tags - The Twitch IRC user tags object accompanying a chat message.
+ * @returns {boolean} True if the user satisfies at least one allowed permission requirement; false otherwise.
  */
 function hasPermission(tags) {
     const allowedPerms = configManager.getTwitchCommandPermissions();

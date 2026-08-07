@@ -2,51 +2,78 @@ import { Client } from "exaroton";
 import { EventEmitter } from "events";
 
 /**
+ * @typedef {Object} ServerSoftware
+ * @property {string} name - Name of the Minecraft server software (e.g., Paper, Velocity).
+ * @property {string} version - Exact version string (e.g., 1.20.4).
+ */
+
+/**
+ * @typedef {Object} PlayerData
+ * @property {number} count - Current number of connected players.
+ * @property {number} max - Maximum configured player capacity.
+ * @property {string[]} [list] - Array of player usernames currently online.
+ */
+
+/**
  * @typedef {Object} ServerStatusData
  * @property {string} id - The unique Exaroton server ID.
  * @property {string} name - The display name of the server.
- * @property {number} status - The current status code (e.g., 0 = offline, 1 = online).
- * @property {string} address - The IP address or domain to connect to.
- * @property {number} port - The port to connect to.
- * @property {string} motd - The Message of the Day.
- * @property {Object} players - Information about the current players (count, max, list).
- * @property {Object} software - Information about the server software (name, version).
- * @property {Array<ServerStatusData>} [backends] - Array of backend servers (only present on the primary return object).
+ * @property {number} status - Exaroton status code (0 = Offline, 1 = Online, 2 = Starting, etc.).
+ * @property {string} address - Server IP or hostname.
+ * @property {number} port - Server connection port.
+ * @property {string} motd - Message of the Day string.
+ * @property {PlayerData} players - Current player statistics.
+ * @property {ServerSoftware} software - Software environment details.
+ * @property {ServerStatusData[]} [backends] - Array of aggregated backend server states (only present on Primary return object).
  */
 
 
 /**
- * Manages the connection and commands to the Exaroton API.
- * Supports both Single-Server and Multi-Server (Proxy + Backends) setups.
- * Emits a 'statusUpdate' event whenever a server's status changes.
+ * Manages connections, real-time WebSocket subscriptions, and lifecycle commands via the Exaroton API.
+ * Handles both Single-Server setups and Multi-Server (Proxy + Backends) architectures.
+ * 
+ * @extends EventEmitter
+ * @fires ServerManager#statusUpdate
+ * @fires ServerManager#targetsChanged
  */
 class ServerManager extends EventEmitter {
+
+    /**
+     * Instantiates the ServerManager.
+     * Initializes empty state collections for API client, server instances, and server IDs.
+     */
     constructor() {
         super();
 
+
         /**
-         * @type {Client|null} The Exaroton API Client instance.
+         * The active Exaroton API Client instance.
+         * @type {Client|null}
          */
         this.client = null;
 
+
         /**
-         * @type {Array<Object>} Array of Exaroton Server objects for executing API commands.
+         * Collection of instantiated Exaroton Server objects used for executing control commands.
+         * @type {Array<Object>}
          */
         this.servers = [];
 
+
         /**
-         * @type {Array<string>} Array of configured Server IDs (Index 0 is always the Primary/Proxy).
+         * List of target Exaroton Server IDs. Index 0 is always designated as Primary (Proxy).
+         * @type {string[]}
          */
         this.serverIds = [];
     }
 
 
     /**
-     * Initializes the Exaroton API client.
+     * Initializes the Exaroton API client instance with a secret token.
      * 
-     * @param {string} apiToken - The secret Exaroton API token.
+     * @param {string} apiToken - Secret authentication token provided by Exaroton.
      * @returns {boolean} True if successfully initialized.
-     * @throws {Error} If the API token is missing.
+     * @throws {Error} Throws an error with code 'MISSING_API_TOKEN' if apiToken is undefined or empty.
      */
     init(apiToken) {
         if (!apiToken) {
@@ -62,12 +89,13 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Sets the target servers to be managed. 
-     * The first ID in the array is treated as the Primary (Proxy) server.
+     * Sets, validates, and subscribes to real-time status events for configured Exaroton target servers.
+     * Automatically assigns Index 0 as Primary (Proxy) and subsequent items as backends.
+     * Unsubscribes from previous WebSocket feeds prior to binding new ones.
      * 
      * @param {string|string[]} serverIds - A single server ID or an array of server IDs.
-     * @returns {boolean} True if servers were successfully configured.
-     * @throws {Error} If the client was not initialized first.
+     * @returns {Promise<string[]>} Array of validated server IDs currently being monitored.
+     * @throws {Error} Throws an error with code 'CLIENT_NOT_INITALIZED' if called before init().
      */
     async setServerTargets(serverIds) {
         if (!this.client) {
@@ -96,11 +124,18 @@ class ServerManager extends EventEmitter {
                     throw new Error(`Invalid server data received for ID: ${id}`);
                 }
 
-                // If we reach here, the ID is valid
+                // Subscribe to Exaroton real-time status updates via WebSockets
                 server.subscribe();
 
                 server.on('status', (newStatus) => {
                     console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
+
+                    /**
+                     * Emitted when a monitored server changes lifecycle status.
+                     * @event ServerManager#statusUpdate
+                     * @type {string} serverId - The Exaroton ID of the updated server.
+                     * @type {number} newStatus - The new status code.
+                     */
                     this.emit('statusUpdate', server.id, newStatus);
                 });
 
@@ -116,6 +151,7 @@ class ServerManager extends EventEmitter {
             return [];
         }
 
+        // Clean up previous subscriptions and listeners
         for (const oldServer of this.servers) {
             try {
                 if (typeof oldServer.unsubscribe === 'function') {
@@ -133,6 +169,12 @@ class ServerManager extends EventEmitter {
         this.serverIds = validIds;
         this.servers = validServers;
 
+
+        /**
+         * Emitted when the target server configuration is successfully updated.
+         * @event ServerManager#targetsChanged
+         * @type {string[]} validIds - Array of monitored server IDs.
+         */
         this.emit('targetsChanged', validIds);
 
         console.log(`[ServerManager] Target servers updated. Monitoring ${this.servers.length} server(s).`);
@@ -145,10 +187,10 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Fetches the status of all configured servers and aggregates the data.
-     * Always inherits the primary structure from the first server (Proxy/Main).
+     * Fetches real-time status metrics from all configured servers concurrently.
+     * Structures output placing Index 0 as primary data with remaining servers grouped under `backends`.
      * 
-     * @returns {Promise<ServerStatusData|null>} The aggregated server data object, or null if empty/failed.
+     * @returns {Promise<ServerStatusData|null>} Aggregated status object, or null if no servers are configured or API call fails.
      */
     async getStatuses() {
         if (this.servers.length === 0) return null;
@@ -200,10 +242,10 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Sends the start command to a specific server by its Exaroton ID.
+     * Dispatches a start command to a specific Exaroton server target by ID.
      * 
-     * @param {string} serverId - The Exaroton ID of the server to start.
-     * @returns {Promise<boolean>} True if the command was sent successfully, false otherwise.
+     * @param {string} serverId - The target Exaroton server ID.
+     * @returns {Promise<boolean>} True if the command was accepted by Exaroton; false otherwise.
      */
     async startServerById(serverId) {
         const targetServer = this.servers.find(server => server.id === serverId);
@@ -225,9 +267,9 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Sends the start command exclusively to the Primary (Proxy) server.
+     * Dispatches a start command exclusively to the Primary (Proxy) server at Index 0.
      * 
-     * @returns {Promise<boolean>} True if the command was sent successfully, otherwise false.
+     * @returns {Promise<boolean>} True if the command was accepted; false if empty or failed.
      */
     async startPrimaryServer() {
         if (this.servers.length === 0) return false;
@@ -244,9 +286,9 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Sends the stop command to ALL configured servers simultaneously.
+     * Dispatches stop commands concurrently to ALL configured servers.
      * 
-     * @returns {Promise<boolean>} True if all commands were sent successfully, otherwise false.
+     * @returns {Promise<boolean>} True if all stop commands succeeded; false if any single request failed.
      */
     async stopAllServers() {
         if (this.servers.length === 0) return false;
@@ -268,9 +310,9 @@ class ServerManager extends EventEmitter {
 
 
     /**
-     * Sends the restart command to ALL configured servers simultaneously.
+     * Dispatches restart commands concurrently to ALL configured servers.
      * 
-     * @returns {Promise<boolean>} True if all commands were sent successfully, otherwise false.
+     * @returns {Promise<boolean>} True if all restart commands succeeded; false if any single request failed.
      */
     async restartAllServers() {
         if (this.servers.length === 0) return false;
@@ -293,5 +335,5 @@ class ServerManager extends EventEmitter {
 
 
 
-// Export a single instance of the ServerManager (Singleton pattern)
+// Export singleton instance
 export const serverManager = new ServerManager();

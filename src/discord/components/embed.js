@@ -1,17 +1,49 @@
 import { EmbedBuilder } from 'discord.js';
 import { configManager } from '../../config/configManager.js';
 
+/**
+ * @typedef {Object} ServerSoftware
+ * @property {string} name - Name of the server software (e.g., Paper, Velocity, Fabric).
+ * @property {string} version - Version string of the server software (e.g., 1.20.4).
+ */
 
 /**
- * Creates the server status embed based on the current Exaroton data.
+ * @typedef {Object} PlayerData
+ * @property {number} count - Current online player count.
+ * @property {number} max - Maximum player capacity.
+ */
+
+/**
+ * @typedef {Object} BackendServerData
+ * @property {string} name - Display name of the backend server.
+ * @property {number} status - Exaroton status code of the backend server.
+ * @property {ServerSoftware} [software] - Software details of the backend server.
+ */
+
+/**
+ * @typedef {Object} ServerData
+ * @property {number} status - Exaroton status code of the primary/proxy server.
+ * @property {string} [address] - IP address or hostname of the server.
+ * @property {number|string} [port] - Server connection port.
+ * @property {PlayerData} [players] - Player count details.
+ * @property {ServerSoftware} [software] - Primary server software details (used in single-server setups).
+ * @property {BackendServerData[]} [backends] - List of linked backend server objects (used in proxy setups).
+ * @property {string} [motd] - Clean or raw Message of the Day string.
+ */
+
+
+/**
+ * Constructs a rich Discord embed displaying real-time Minecraft server details.
+ * Dynamically adjusts fields based on single-server vs. multi-server/proxy topologies
+ * and reflects global maintenance mode status when enabled.
  * 
- * @param {Object|null} serverData - The aggregated server data from ServerManager.
- * @returns {EmbedBuilder} The configured Discord embed.
+ * @param {ServerData|null} serverData - Aggregated server status object from ServerManager, or null if unconfigured.
+ * @returns {EmbedBuilder} A fully configured Discord EmbedBuilder instance.
  */
 export function createStatusEmbed(serverData) {
     const embed = new EmbedBuilder();
 
-    // 1. Fall: No servers configured
+    // Fallback state when no server targets are configured or data fetching failed
     if (!serverData) {
         return embed
             .setTitle('⚙️ Minecraft Server Status')
@@ -46,7 +78,7 @@ export function createStatusEmbed(serverData) {
 
     const hasBackends = serverData.backends && serverData.backends.length > 0;
 
-    // Software/Version ONLY if there are NO backends (Single Server / Primary is the game server)
+    // Display software version only if there are no backends (standalone primary game server)
     if (!hasBackends && serverData.software) {
         embed.addFields({ 
             name: 'Software Version', 
@@ -55,7 +87,7 @@ export function createStatusEmbed(serverData) {
         });
     }
 
-    // If backends are present (Multi-Server / Proxy Setup), show version per backend
+    // Display list of backend servers with status indicators if proxy setup is active
     if (hasBackends) {
         const backendList = serverData.backends.map(b => {
             let bStatusEmoji = '🟡'; 
@@ -76,10 +108,10 @@ export function createStatusEmbed(serverData) {
         
         descriptionText += '🚧 **Maintenance mode active!**\n*The server is currently being configured. Bot controls are temporarily disabled.*\n\n';
 
-        embed.setColor(0xe67e22); 
+        embed.setColor(0xe67e22); // Orange override during maintenance
     }
 
-    // MOTD (Message of the Day) if available
+    // Parse and append MOTD (Message of the Day), stripping Minecraft formatting codes (§a, §l, etc.)
     if (serverData.motd) {
         const cleanMotd = serverData.motd.replace(/§[0-9a-fk-or]/g, '');
         embed.setDescription(`> *${cleanMotd}*`);

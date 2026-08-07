@@ -4,6 +4,14 @@ import { serverManager } from '../../services/serverManager.js';
 import { isServerAdmin } from '../utils/permissions.js';
 import { startTwitchBot, stopTwitchBot } from '../../twitch/twitchClient.js';
 
+
+/**
+ * Slash Command Builder definition for the `/config` command hierarchy.
+ * Restricts default guild member usage to administrators with `ManageGuild` permissions.
+ * Contains subcommands for viewing and updating runtime configurations.
+ * 
+ * @type {SlashCommandBuilder}
+ */
 export const data = new SlashCommandBuilder()
     .setName('config')
     .setDMPermission(false)
@@ -30,7 +38,7 @@ export const data = new SlashCommandBuilder()
             .setDescription('Set the Exaroton server IDs (Primary/Proxy first, then backends).')
             .addStringOption(option =>
                 option.setName('ids')
-                    .setDescription('Server IDs separated by comma (e.g. ID1,ID2,ID3)')
+                    .setDescription('Server IDs separated by comma (e.g. ID1,ID2,ID3) or "clear" to reset all IDs.')
                     .setRequired(true)
             )
     )
@@ -92,7 +100,18 @@ export const data = new SlashCommandBuilder()
             )
     );
 
+
+/**
+ * Executes the `/config` slash command interactions.
+ * Validates user admin rights before delegating processing to specific subcommand handlers.
+ * Handles subcommands: `show`, `maintenance`, `servers`, `twitch`, `twitch-perm`, and `button-role`.
+ * 
+ * @param {ChatInputCommandInteraction} interaction - The Discord chat input command interaction object.
+ * @returns {Promise<void>} Resolves when the interaction reply has been sent.
+ * @throws {Error} Throws an error if sub-service operations fail (e.g., Exaroton verification or Twitch reconnect).
+ */
 export async function execute(interaction) {
+    // Verify admin permissions via utility function
     if (!isServerAdmin(interaction.member)) {
         return interaction.reply({
             content: '❌ You do not have permission to use this command.',
@@ -102,6 +121,11 @@ export async function execute(interaction) {
 
     const subcommand = interaction.options.getSubcommand();
 
+
+    /**
+     * Subcommand: show
+     * Displays an ephemeral embed outlining the current configuration state.
+     */
     if (subcommand === 'show') {
         const serverIds = configManager.getServerIds();
         const twitchChannel = configManager.getTwitchChannel() || '*Not set*';
@@ -129,6 +153,11 @@ export async function execute(interaction) {
         return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral  });
     }
 
+
+    /**
+     * Subcommand: maintenance
+     * Toggles global maintenance mode and triggers a status embed update.
+     */
     if (subcommand === 'maintenance') {
         const enabled = interaction.options.getBoolean('enabled');
         configManager.setMaintenanceMode(enabled);
@@ -148,10 +177,16 @@ export async function execute(interaction) {
         }
     }
 
+
+    /**
+     * Subcommand: servers
+     * Updates target Exaroton server IDs. Validates IDs against the Exaroton API before saving.
+     */
     if (subcommand === 'servers') {
         const rawIds = interaction.options.getString('ids');
         let ids = rawIds.split(',').map(id => id.replace(/#/g, '').trim()).filter(Boolean);
 
+        // Handle explicit clear commands
         if (ids.length === 1 && (ids[0].toLowerCase() === 'clear' || ids[0].toLowerCase() === 'none')) {
             await serverManager.setServerTargets([]);
             configManager.setServerIds([]);
@@ -187,10 +222,16 @@ export async function execute(interaction) {
         });
     }
 
+
+    /**
+     * Subcommand: twitch
+     * Updates monitored Twitch channel name and restarts the Twitch chat bot service dynamically.
+     */
     if (subcommand === 'twitch') {
         const channel = interaction.options.getString('channel');
         configManager.setTwitchChannel(channel);
 
+        // Disconnect old client and reconnect to new channel
         await stopTwitchBot();
         await startTwitchBot();
 
@@ -200,6 +241,11 @@ export async function execute(interaction) {
         });
     }
 
+
+    /**
+     * Subcommand: twitch-perm
+     * Grants or revokes permission levels required to run Twitch chat commands.
+     */
     if (subcommand === 'twitch-perm') {
         const level = interaction.options.getString('level');
         const allow = interaction.options.getBoolean('allow');
@@ -220,6 +266,11 @@ export async function execute(interaction) {
         });
     }
 
+
+    /**
+     * Subcommand: button-role
+     * Assigns or revokes Discord role permissions for specific control embed buttons.
+     */
     if (subcommand === 'button-role') {
         const action = interaction.options.getString('action');
         const role = interaction.options.getRole('role');
