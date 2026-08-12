@@ -52,6 +52,7 @@ export function createStatusEmbed(serverData) {
     }
 
     const statusMap = {
+        "-1": { name: '📡 API Error / Offline', color: 0x95a5a6 },
         0:  { name: '🔴 Offline', color: 0xe74c3c },       // Red
         1:  { name: '🟢 Online', color: 0x2ecc71 },        // Green
         2:  { name: '🟡 Starting...', color: 0xf1c40f },   // Yellow

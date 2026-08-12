@@ -124,6 +124,10 @@ export async function startDiscordBot() {
 
         console.log('[Discord] Performing initial sync of status embed...');
         await syncStatusMessage();
+
+        setInterval(async () => {
+            await syncStatusMessage();
+        }, 5 * 60 * 1000);
     });
 
     /**

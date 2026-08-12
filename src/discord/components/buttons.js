@@ -46,7 +46,8 @@ export function createControlButtons(serverStatus = 0) {
         case 1: // Online
             row.addComponents(stopButton, restartButton);
             break;
-            
+        
+        case -1: // API Error
         case 2: // Starting
         case 3: // Stopping
         case 4: // Restarting

@@ -127,8 +127,26 @@ class ServerManager extends EventEmitter {
                 // Subscribe to Exaroton real-time status updates via WebSockets
                 server.subscribe();
 
-                server.on('status', (newStatus) => {
-                    console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${newStatus}`);
+                server.on('status', (payload) => {
+                    let statusCode;
+
+                    if (typeof payload === 'object' && payload !== null) {
+
+
+                        if (typeof payload.status === 'number') {
+                            statusCode = payload.status;
+                        } else {
+                            console.error(`[ServerManager] API/Network Error for ${server.id}:`, payload);
+                            statusCode = -1;
+                        }
+                    } else if (typeof payload === 'number') {
+                        statusCode = payload;
+                    } else {
+                        console.warn(`[ServerManager] Unexpected payload for ${server.id}:`, payload);
+                        statusCode = -1;
+                    }
+
+                    console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${statusCode}`);
 
                     /**
                      * Emitted when a monitored server changes lifecycle status.
@@ -136,7 +154,7 @@ class ServerManager extends EventEmitter {
                      * @type {string} serverId - The Exaroton ID of the updated server.
                      * @type {number} newStatus - The new status code.
                      */
-                    this.emit('statusUpdate', server.id, newStatus);
+                    this.emit('statusUpdate', server.id, statusCode);
                 });
 
                 validIds.push(id);
@@ -214,8 +232,8 @@ class ServerManager extends EventEmitter {
                         console.error(`[ServerManager] Failed to fetch data for server ${server.id}:`, innerError.message);
                         return {
                             id: server.id,
-                            name: 'Unknown/Error',
-                            status: 0,
+                            name: 'API/Error',
+                            status: -1,
                             address: 'unknown',
                             port: 0,
                             players: { count: 0, max: 0, list: [] },
