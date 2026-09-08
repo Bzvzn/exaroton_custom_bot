@@ -51,7 +51,13 @@ Rename the ```.env.example``` file to ```.env``` and add your secret tokens.
         - Bot Permissions: Select the necessary permissions (```Send Messages```, ```Embed Links```, ```Read Message History```) directly in the generator checklist.
     - Copy the generated URL and use it to invite the bot to your Discord server.
 
-### 4. Running the bot with PM2
+### 4. Configure Bot Settings (config.json)
+The bot uses a configuration file for basic settings (like the default Twitch command). 
+
+1. Rename the `config.json.example` file to `config.json`.
+2. Open the file and adjust the default values if needed.
+
+### 5. Running the bot with PM2
 Use PM2 to ensure the bot runs continuously and restarts automatically on errors.
 *(Note: These background process commands are intended for Linux servers.)*
 
@@ -73,7 +79,7 @@ Use PM2 to ensure the bot runs continuously and restarts automatically on errors
 - Stop the bot: ```pm2 stop mc-server-manager```
 - Check bot status and resources: ```pm2 status```
 
-### 5. Bot Configuration
+### 6. Bot Configuration
 Most of the bot is controlled directly via slash commands in Discord.
 
 #### Server Setup
@@ -123,7 +129,7 @@ Disables server control via the Discord embed buttons and Twitch chat. The embed
 
 Displays an overview of your current bot configuration (linked servers, permissions, etc.).
 
-### 6. Creating the status embed
+### 7. Creating the status embed
 
 ```/setup```
 
