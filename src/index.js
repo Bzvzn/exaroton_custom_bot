@@ -103,6 +103,12 @@ process.on('SIGTERM', () => shutdown(0));
  * Logs error details to console and triggers forced teardown with exit code 1.
  */
 process.on('uncaughtException', (error) => {
+    // Websocket Error of Exaroton. Can not be caught in ServerManager.js, since exaroton has no error handling for it
+    if (error && error.message && error.message.includes('Unexpected server response')) {
+        console.warn(`[System] Ignore Websocket Disconnect: ${error.message}`);
+        return;
+    }
+
     console.error('[System] Uncaught Exception:', error);
     shutdown(1);
 });
