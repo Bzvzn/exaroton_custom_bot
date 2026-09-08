@@ -58,7 +58,7 @@ Use PM2 to ensure the bot runs continuously and restarts automatically on errors
 
 1. **Start the bot using the ecosystem config:**
     ```bash
-    pm2 start ecosystem.config.js
+    pm2 start ecosystem.config.cjs
     ```
 
 2. **Save the PM2 process list so it survives system reboots:**
