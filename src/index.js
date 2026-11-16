@@ -6,17 +6,27 @@ import { startTwitchBot, stopTwitchBot } from './twitch/twitchClient.js';
 
 
 /**
- * Waits until an active internet connection (DNS resolution) is available.
- * Prevents premature initialization after a power outage when the Pi boots faster than the router.
+ * Waits until the Exaroton API is actually reachable via HTTPS.
+ * More reliable than dns.lookup because it bypasses local DNS resolver delays after reboot.
  */
 async function waitForInternet(retryIntervalMs = 5000) {
+    console.log('[Bootstrap] Waiting for internet connection...');
     while (true) {
         try {
-            await dns.lookup('api.exaroton.com');
-            console.log('[Bootstrap] Internet connection verified.');
+            // Test connection with a lightweight HEAD request and a short 3s timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+            await fetch('https://api.exaroton.com/v1/', {
+                method: 'HEAD',
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+            console.log('[Bootstrap] Internet connection verified successfully.');
             return;
         } catch {
-            console.warn(`[Bootstrap] No internet connection yet. Retrying in ${retryIntervalMs / 1000}s...`);
+            // Silent retry until connection succeeds
             await new Promise((resolve) => setTimeout(resolve, retryIntervalMs));
         }
     }
