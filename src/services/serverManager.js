@@ -242,6 +242,7 @@ class ServerManager extends EventEmitter {
         });
     }
 
+    
     /**
      * Periodically checks server states and heals silent WebSocket disconnects after power/internet outages.
      */
@@ -280,6 +281,7 @@ class ServerManager extends EventEmitter {
         }, 60_000);
     }
 
+
     /**
      * Unsubscribes and removes listeners from all currently tracked server instances.
      */
@@ -297,6 +299,7 @@ class ServerManager extends EventEmitter {
             } catch (e) { }
         }
     }
+
 
     /**
      * Fetches real-time status metrics from all configured servers concurrently.
@@ -353,6 +356,7 @@ class ServerManager extends EventEmitter {
         }
     }
 
+
     /**
      * Dispatches a start command to a specific Exaroton server target by ID.
      * 
@@ -384,6 +388,7 @@ class ServerManager extends EventEmitter {
         }
     }
 
+
     /**
      * Dispatches a start command exclusively to the Primary (Proxy) server at Index 0.
      * 
@@ -411,6 +416,7 @@ class ServerManager extends EventEmitter {
         }
     }
 
+
     /**
      * Dispatches stop commands concurrently to ALL configured servers.
      * 
@@ -433,6 +439,7 @@ class ServerManager extends EventEmitter {
         console.log('[ServerManager] All servers stopped successfully.');
         return true;
     }
+
 
     /**
      * Dispatches restart commands concurrently to ALL configured servers.
