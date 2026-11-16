@@ -6,6 +6,24 @@ import { startTwitchBot, stopTwitchBot } from './twitch/twitchClient.js';
 
 
 /**
+ * Waits until an active internet connection (DNS resolution) is available.
+ * Prevents premature initialization after a power outage when the Pi boots faster than the router.
+ */
+async function waitForInternet(retryIntervalMs = 5000) {
+    while (true) {
+        try {
+            await dns.lookup('api.exaroton.com');
+            console.log('[Bootstrap] Internet connection verified.');
+            return;
+        } catch {
+            console.warn(`[Bootstrap] No internet connection yet. Retrying in ${retryIntervalMs / 1000}s...`);
+            await new Promise((resolve) => setTimeout(resolve, retryIntervalMs));
+        }
+    }
+}
+
+
+/**
  * Main application bootstrap function.
  * Orchestrates step-by-step startup sequence:
  * 1. Initializes SQLite persistence database.
@@ -30,6 +48,9 @@ async function bootstrap() {
 
         // 2. Initialize Configurations (.env & config.json)
         configManager.init();
+
+        // 2.5 Wait for Router / Internet connection after power outage
+        await waitForInternet();
 
         // 3. Initialize the Exaroton API Client
         serverManager.init(configManager.exarotonToken);
