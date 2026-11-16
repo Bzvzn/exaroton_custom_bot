@@ -37,7 +37,7 @@ async function bootstrap() {
         // 4. Load saved Server IDs from the database
         const serverIds = configManager.getServerIds();
         if (serverIds.length > 0) {
-            serverManager.setServerTargets(serverIds);
+            await serverManager.setServerTargets(serverIds);
         } else {
             console.log('[Bootstrap] No Exaroton servers configured yet. You can set them up via Discord later.');
         }

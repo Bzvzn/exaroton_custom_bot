@@ -27,7 +27,6 @@ import { EventEmitter } from "events";
  * @property {ServerStatusData[]} [backends] - Array of aggregated backend server states (only present on Primary return object).
  */
 
-
 /**
  * Manages connections, real-time WebSocket subscriptions, and lifecycle commands via the Exaroton API.
  * Handles both Single-Server setups and Multi-Server (Proxy + Backends) architectures.
@@ -45,13 +44,11 @@ class ServerManager extends EventEmitter {
     constructor() {
         super();
 
-
         /**
          * The active Exaroton API Client instance.
          * @type {Client|null}
          */
         this.client = null;
-
 
         /**
          * Collection of instantiated Exaroton Server objects used for executing control commands.
@@ -59,14 +56,52 @@ class ServerManager extends EventEmitter {
          */
         this.servers = [];
 
-
         /**
          * List of target Exaroton Server IDs. Index 0 is always designated as Primary (Proxy).
          * @type {string[]}
          */
         this.serverIds = [];
+
+        /**
+         * Cache of the last known status code per server ID to detect missed WebSocket updates after network drops.
+         * @type {Map<string, number>}
+         */
+        this.lastKnownStatus = new Map();
+
+        /**
+         * Periodic watchdog timer to heal dead WebSocket connections after internet outages.
+         * @type {NodeJS.Timeout|null}
+         */
+        this.watchdogInterval = null;
     }
 
+    /**
+     * Helper that fetches server data with automatic retries for transient API/network glitches.
+     * Prevents "Cannot read properties of null (reading 'success')" or brief connection drops from failing immediately.
+     * 
+     * @param {Object} server - Exaroton server instance.
+     * @param {number} [retries=2] - Number of retry attempts.
+     * @param {number} [delayMs=2000] - Delay between retries in milliseconds.
+     * @returns {Promise<Object>} The fetched server data.
+     */
+    async fetchServerWithRetry(server, retries = 2, delayMs = 2000) {
+        let lastError;
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const data = await server.get();
+                if (!data || !data.id) {
+                    throw new Error(`Empty response received for server ${server.id}`);
+                }
+                return data;
+            } catch (error) {
+                lastError = error;
+                if (attempt < retries) {
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                }
+            }
+        }
+        throw lastError;
+    }
 
     /**
      * Initializes the Exaroton API client instance with a secret token.
@@ -86,7 +121,6 @@ class ServerManager extends EventEmitter {
         console.log('[ServerManager] Exaroton API Client successfully initialized.');
         return true;
     }
-
 
     /**
      * Sets, validates, and subscribes to real-time status events for configured Exaroton target servers.
@@ -113,80 +147,39 @@ class ServerManager extends EventEmitter {
         const validIds = [];
         const validServers = [];
 
-        // Verify each ID using server.get() before subscribing
+        // Verify each ID using fetchServerWithRetry() before subscribing
         for (const id of ids) {
             try {
                 const server = this.client.server(id);
 
-                const serverData = await server.get();
+                // Retry up to 3 times (every 3s) in case the router/API is still recovering
+                const serverData = await this.fetchServerWithRetry(server, 3, 3000);
 
-                if (!serverData || !serverData.id) {
-                    throw new Error(`Invalid server data received for ID: ${id}`);
-                }
+                this.lastKnownStatus.set(server.id, serverData.status);
 
                 // Subscribe to Exaroton real-time status updates via WebSockets
-                server.subscribe();
-
-                server.on('status', (payload) => {
-                    let statusCode;
-
-                    if (typeof payload === 'object' && payload !== null) {
-
-
-                        if (typeof payload.status === 'number') {
-                            statusCode = payload.status;
-                        } else {
-                            console.error(`[ServerManager] API/Network Error for ${server.id}:`, payload);
-                            statusCode = -1;
-                        }
-                    } else if (typeof payload === 'number') {
-                        statusCode = payload;
-                    } else {
-                        console.warn(`[ServerManager] Unexpected payload for ${server.id}:`, payload);
-                        statusCode = -1;
-                    }
-
-                    console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${statusCode}`);
-
-                    /**
-                     * Emitted when a monitored server changes lifecycle status.
-                     * @event ServerManager#statusUpdate
-                     * @type {string} serverId - The Exaroton ID of the updated server.
-                     * @type {number} newStatus - The new status code.
-                     */
-                    this.emit('statusUpdate', server.id, statusCode);
-                });
+                this.bindServerSubscription(server);
 
                 validIds.push(id);
                 validServers.push(server);
             } catch (error) {
-                console.warn(`[ServerManager] Invalid or unreachable Server ID ignored: ${id}`);
+                console.warn(`[ServerManager] Invalid or unreachable Server ID ignored: ${id} (${error.message || error})`);
             }
         }
 
         if (ids.length > 0 && validIds.length === 0) {
-            console.warn('[ServerManager] Aborting target update: All provided IDs were invalid. Keeping previous servers.');
+            console.warn('[ServerManager] Aborting target update: All provided IDs were invalid or unreachable. Keeping previous servers.');
             return [];
         }
 
         // Clean up previous subscriptions and listeners
-        for (const oldServer of this.servers) {
-            try {
-                if (typeof oldServer.unsubscribe === 'function') {
-                    try {
-                        oldServer.unsubscribe();
-                    } catch (e) { }
-                }
-                if (typeof oldServer.removeAllListeners === 'function') {
-                    oldServer.removeAllListeners('status');
-                }
-            } catch (e) {
-            }
-        }
+        this.cleanupServers();
 
         this.serverIds = validIds;
         this.servers = validServers;
 
+        // Start background watchdog to recover from dead WebSockets after internet outages
+        this.startWatchdog();
 
         /**
          * Emitted when the target server configuration is successfully updated.
@@ -203,6 +196,107 @@ class ServerManager extends EventEmitter {
         return validIds;
     }
 
+    /**
+     * Subscribes a server instance to WebSocket updates and attaches the status event listener.
+     * 
+     * @param {Object} server - Exaroton server instance.
+     */
+    bindServerSubscription(server) {
+        if (typeof server.removeAllListeners === 'function') {
+            server.removeAllListeners('status');
+        }
+
+        try {
+            server.subscribe();
+        } catch (err) {
+            console.warn(`[ServerManager] Initial WebSocket subscribe warning for ${server.id}:`, err.message);
+        }
+
+        server.on('status', (payload) => {
+            let statusCode;
+
+            if (typeof payload === 'object' && payload !== null) {
+                if (typeof payload.status === 'number') {
+                    statusCode = payload.status;
+                } else {
+                    console.error(`[ServerManager] API/Network Error for ${server.id}:`, payload);
+                    statusCode = -1;
+                }
+            } else if (typeof payload === 'number') {
+                statusCode = payload;
+            } else {
+                console.warn(`[ServerManager] Unexpected payload for ${server.id}:`, payload);
+                statusCode = -1;
+            }
+
+            this.lastKnownStatus.set(server.id, statusCode);
+            console.log(`[ServerManager] Live status update for ${server.id}: Status is now ${statusCode}`);
+
+            /**
+             * Emitted when a monitored server changes lifecycle status.
+             * @event ServerManager#statusUpdate
+             * @type {string} serverId - The Exaroton ID of the updated server.
+             * @type {number} newStatus - The new status code.
+             */
+            this.emit('statusUpdate', server.id, statusCode);
+        });
+    }
+
+    /**
+     * Periodically checks server states and heals silent WebSocket disconnects after power/internet outages.
+     */
+    startWatchdog() {
+        if (this.watchdogInterval) {
+            clearInterval(this.watchdogInterval);
+        }
+
+        // Check every 60 seconds
+        this.watchdogInterval = setInterval(async () => {
+            if (this.servers.length === 0) return;
+
+            for (const server of this.servers) {
+                try {
+                    const data = await server.get();
+                    if (!data || typeof data.status !== 'number') continue;
+
+                    const previousStatus = this.lastKnownStatus.get(server.id);
+
+                    // If status changed while WebSocket was dead/offline, re-sync and emit statusUpdate
+                    if (previousStatus !== undefined && previousStatus !== data.status) {
+                        console.log(`[ServerManager] Watchdog detected missed status change for ${server.id} (${previousStatus} -> ${data.status}). Re-syncing WebSocket...`);
+                        this.lastKnownStatus.set(server.id, data.status);
+
+                        try {
+                            server.unsubscribe();
+                        } catch (e) { }
+                        this.bindServerSubscription(server);
+
+                        this.emit('statusUpdate', server.id, data.status);
+                    }
+                } catch (err) {
+                    // Ignore transient network errors during background check
+                }
+            }
+        }, 60_000);
+    }
+
+    /**
+     * Unsubscribes and removes listeners from all currently tracked server instances.
+     */
+    cleanupServers() {
+        for (const oldServer of this.servers) {
+            try {
+                if (typeof oldServer.unsubscribe === 'function') {
+                    try {
+                        oldServer.unsubscribe();
+                    } catch (e) { }
+                }
+                if (typeof oldServer.removeAllListeners === 'function') {
+                    oldServer.removeAllListeners('status');
+                }
+            } catch (e) { }
+        }
+    }
 
     /**
      * Fetches real-time status metrics from all configured servers concurrently.
@@ -217,7 +311,9 @@ class ServerManager extends EventEmitter {
             const statuses = await Promise.all(
                 this.servers.map(async (server) => {
                     try {
-                        const serverData = await server.get();
+                        const serverData = await this.fetchServerWithRetry(server, 1, 1500);
+                        this.lastKnownStatus.set(server.id, serverData.status);
+
                         return {
                             id: server.id,
                             name: serverData.name,
@@ -229,7 +325,7 @@ class ServerManager extends EventEmitter {
                             software: serverData.software
                         };
                     } catch (innerError) {
-                        console.error(`[ServerManager] Failed to fetch data for server ${server.id}:`, innerError.message);
+                        console.error(`[ServerManager] Failed to fetch data for server ${server.id}: ${innerError.message || innerError}`);
                         return {
                             id: server.id,
                             name: 'API/Error',
@@ -244,7 +340,6 @@ class ServerManager extends EventEmitter {
             );
 
             const primary = statuses[0];
-
             const backends = statuses.slice(1);
 
             return {
@@ -253,11 +348,10 @@ class ServerManager extends EventEmitter {
             };
 
         } catch (error) {
-            console.error('[ServerManager] Error fetching server statuses:', error);
+            console.error('[ServerManager] Error fetching server statuses:', error.message || error);
             return null;
         }
     }
-
 
     /**
      * Dispatches a start command to a specific Exaroton server target by ID.
@@ -278,11 +372,17 @@ class ServerManager extends EventEmitter {
             console.log(`[ServerManager] Start command sent to specific server: ${serverId}`);
             return true;
         } catch (error) {
-            console.error(`[ServerManager] Failed to start server ${serverId}:`, error);
+            // Handle HTTP 208 (Server is already starting / online) gracefully
+            if (error?.statusCode === 208 || error?.message?.includes('already starting')) {
+                console.warn(`[ServerManager] Server ${serverId} is already starting (HTTP 208). Syncing status...`);
+                this.emit('statusUpdate', targetServer.id, targetServer.status ?? 2);
+                return true;
+            }
+
+            console.error(`[ServerManager] Failed to start server ${serverId}: ${error.message || error}`);
             return false;
         }
     }
-
 
     /**
      * Dispatches a start command exclusively to the Primary (Proxy) server at Index 0.
@@ -292,16 +392,24 @@ class ServerManager extends EventEmitter {
     async startPrimaryServer() {
         if (this.servers.length === 0) return false;
 
+        const primaryServer = this.servers[0];
+
         try {
-            await this.servers[0].start();
+            await primaryServer.start();
             console.log('[ServerManager] Start command sent to Primary (Proxy) server.');
             return true;
         } catch (error) {
-            console.error('[ServerManager] Failed to start Primary server:', error);
+            // Handle HTTP 208 (Server is already starting / online) gracefully
+            if (error?.statusCode === 208 || error?.message?.includes('already starting')) {
+                console.warn('[ServerManager] Primary server is already starting (HTTP 208). Syncing status...');
+                this.emit('statusUpdate', primaryServer.id, primaryServer.status ?? 2);
+                return true;
+            }
+
+            console.error(`[ServerManager] Failed to start Primary server: ${error.message || error}`);
             return false;
         }
     }
-
 
     /**
      * Dispatches stop commands concurrently to ALL configured servers.
@@ -326,7 +434,6 @@ class ServerManager extends EventEmitter {
         return true;
     }
 
-
     /**
      * Dispatches restart commands concurrently to ALL configured servers.
      * 
@@ -350,8 +457,6 @@ class ServerManager extends EventEmitter {
         return true;
     }
 }
-
-
 
 // Export singleton instance
 export const serverManager = new ServerManager();
